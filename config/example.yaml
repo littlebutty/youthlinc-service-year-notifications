@@ -1,0 +1,24 @@
+# trip-facts configuration file
+# One file per trip/group. Copy this file and rename it for each trip.
+# Example: kenya_2026.yaml, peru_2026.yaml, etc.
+
+# Display name for this trip (used in logs)
+trip_name: "Kenya Summer 2026"
+
+# The country the group is visiting — used to generate facts and pull photos
+country: "Kenya"
+
+# GroupMe bot ID for this group's channel
+# See README.md for instructions on creating a bot and finding the bot ID
+groupme_bot_id: "YOUR_BOT_ID_HERE"
+
+# When to START sending daily facts (YYYY-MM-DD)
+start_date: "2026-05-01"
+
+# The trip departure date — facts stop being sent on this day (YYYY-MM-DD)
+trip_date: "2026-06-15"
+
+# How often to send:
+#   daily   — sends every day between start_date and trip_date (default)
+#   weekly  — sends once per week on Saturdays only
+frequency: "daily"
