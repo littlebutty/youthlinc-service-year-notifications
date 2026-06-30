@@ -100,7 +100,8 @@ def should_send_today(config: dict, today: date, force: bool = False) -> tuple[b
 # Fun fact generation
 # ---------------------------------------------------------------------------
 
-def generate_fun_fact(country: str, trip_name: str, client: anthropic.Anthropic) -> str:
+def generate_fun_fact(country: str, trip_name: str, client: anthropic.Anthropic) -> tuple[str, str]:
+    """Return (fun_fact_text, image_search_query)."""
     import random
     topic = random.choice(FACT_TOPICS)
 
@@ -108,7 +109,7 @@ def generate_fun_fact(country: str, trip_name: str, client: anthropic.Anthropic)
         f"Generate an engaging fun fact about {country} focused on {topic}. "
         f"This is for young humanitarian volunteers with Youthlinc preparing for their "
         f'upcoming trip there as part of "{trip_name}".\n\n'
-        "Requirements:\n"
+        "Requirements for the fun fact:\n"
         "- Genuinely surprising or little-known\n"
         "- Respectful, positive, and culturally sensitive\n"
         "- Appropriate for teenagers and young adults\n"
@@ -116,29 +117,48 @@ def generate_fun_fact(country: str, trip_name: str, client: anthropic.Anthropic)
         "- Start with a relevant emoji\n"
         "- Written as an enthusiastic message that builds excitement\n"
         "- Do NOT include a title, subject line, or opening like 'Fun Fact:'\n"
-        "- Do NOT mention the topic category you were given"
+        "- Do NOT mention the topic category you were given\n\n"
+        "After the fun fact, on a new line write exactly:\n"
+        "IMAGE_QUERY: <a short 3-6 word Unsplash search query>\n\n"
+        "Requirements for the image query:\n"
+        f"- Must be directly relevant to the specific fact and to {country}\n"
+        "- Focus on landscapes, architecture, food, wildlife, markets, or cultural objects\n"
+        "- Do NOT suggest beaches, swimwear, pools, or people in casual clothing\n"
+        "- Suitable and appropriate for a youth humanitarian group\n"
+        "- Example format: 'Ecuadorian market colorful textiles' or 'ancient Incan ruins mountains'"
     )
 
     message = client.messages.create(
         model="claude-opus-4-6",
-        max_tokens=350,
+        max_tokens=400,
         messages=[{"role": "user", "content": prompt}],
     )
-    return message.content[0].text.strip()
+    raw = message.content[0].text.strip()
+
+    if "IMAGE_QUERY:" in raw:
+        parts = raw.split("IMAGE_QUERY:", 1)
+        fact = parts[0].strip()
+        image_query = parts[1].strip()
+    else:
+        fact = raw
+        image_query = country
+
+    return fact, image_query
 
 
 # ---------------------------------------------------------------------------
 # Image handling
 # ---------------------------------------------------------------------------
 
-def fetch_unsplash_image(country: str, access_key: str) -> tuple[bytes | None, str]:
+def fetch_unsplash_image(image_query: str, access_key: str) -> tuple[bytes | None, str]:
     """Return (image_bytes, content_type) or (None, '')."""
     try:
         resp = requests.get(
             UNSPLASH_RANDOM_URL,
             params={
-                "query": country,
+                "query": image_query,
                 "orientation": "landscape",
+                "content_filter": "high",
                 "client_id": access_key,
             },
             timeout=10,
@@ -216,11 +236,15 @@ def process_trip(config: dict, dry_run: bool = False) -> bool:
 
     print(f"  Generating fun fact about {country}...")
     client = anthropic.Anthropic(api_key=anthropic_key)
-    fact = generate_fun_fact(country, trip_name, client)
+    fact, image_query = generate_fun_fact(country, trip_name, client)
     print(f"  Fact ({len(fact)} chars):\n    {fact[:120]}{'...' if len(fact) > 120 else ''}")
+    print(f"  Image query: {image_query}")
 
     print("  Fetching Unsplash photo...")
-    image_bytes, content_type = fetch_unsplash_image(country, unsplash_key)
+    image_bytes, content_type = fetch_unsplash_image(image_query, unsplash_key)
+    if not image_bytes and image_query != country:
+        print(f"  No results for specific query — retrying with '{country}'...")
+        image_bytes, content_type = fetch_unsplash_image(country, unsplash_key)
 
     picture_url = None
     if image_bytes:
